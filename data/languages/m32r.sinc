@@ -11,7 +11,7 @@ define register offset=0x40 size=4 [ PSW CBR SPI SPU CR4 CR5 BPC FPSR pc];
 define register offset=0x100 size=8 [ ACC ];
 
 
-@define C		"PSW[0,1"		# migrate to this
+@define C		"PSW[0,1]"		# migrate to this
 @define C_flag	"PSW[0,1]"		# C: 	Condition Bit
 @define IE		"PSW[6,1]"		# IE:	Interrupt Enable Bit
 @define SM		"PSW[7,1]"		# SM:	Stack Mode Bit
@@ -209,7 +209,10 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 }
 
 :BTST	"#"bitpos, Rsrc			is op1=0 & op2_1=0 & bitpos; op3=15 & Rsrc {
-	$(C_flag) = (((Rsrc >> (7 - bitpos)) & 1) == 0);
+	#$(C_flag) = (((Rsrc >> (7 - bitpos)) & 1) == 0);
+	# the way below seems to help Ghidra's decompiler, especially when using ENUM.
+	local tmp = Rsrc & (1 << (7 - bitpos));
+	$(C) = (tmp != 0);
 }
 
 :CLRPSW	"#"imm8					is op12=0x72; imm8 {
