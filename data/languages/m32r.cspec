@@ -4,8 +4,12 @@
 	<global>
 		<range space="mem"/>
 	</global>
+	<stackpointer register="SP" space="mem" growth="negative"/>
+	<returnaddress>
+		<register name="R14"/>
+	</returnaddress>
 	<default_proto>
-	    <prototype name="default" extrapop="unknown" stackshift="0">
+	    <prototype name="default" extrapop="0" stackshift="0">
 	        <input>
 	        	<pentry minsize="1" maxsize="4">
 	        		<register name="R0"/>
@@ -16,17 +20,20 @@
 	        	<pentry minsize="1" maxsize="4">
 	        		<register name="R2"/>
 	        	</pentry>
+	        	<pentry minsize="1" maxsize="128" align="1">
+	        		<addr space="stack" offset="8"/>
+	        	</pentry>
 	        </input>
 	        <output>
 	        	<pentry minsize="1" maxsize="4">
 	        		<register name="R0"/>
 	        	</pentry>
 	        </output>
+	        <unaffected>
+	        	<register name="SP"/>
+        	</unaffected>
 	    </prototype>
 	</default_proto>
 
-  <stackpointer register="SP" space="mem"/>
-  <returnaddress>
-  	<register name="R14"/>
-  </returnaddress>
+	
 </compiler_spec>

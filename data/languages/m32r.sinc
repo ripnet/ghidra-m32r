@@ -12,7 +12,8 @@ define register offset=0x100 size=8 [ ACC ];
 
 
 @define C		"PSW[0,1]"		# migrate to this
-@define C_flag	"PSW[0,1]"		# C: 	Condition Bit
+#@define C		"CBR[0,1]"		# migrate to this
+#@define C_flag	"PSW[0,1]"		# C: 	Condition Bit
 @define IE		"PSW[6,1]"		# IE:	Interrupt Enable Bit
 @define SM		"PSW[7,1]"		# SM:	Stack Mode Bit
 								#		0 = Uses R15 as the interrupt stack pointer
@@ -21,6 +22,9 @@ define register offset=0x100 size=8 [ ACC ];
 @define BIE		"PSW[14,1]"		# BIE:	Backup IE Bit (Saves value of IE bit when EIT occurs)
 @define BSM		"PSW[15,1]"		# BSM:	Backup SM Bit (Saves value of SM bit when EIT occurs)
 
+
+define pcodeop write_creg;
+define pcodeop read_creg;
 
 # Tokens
 
@@ -68,7 +72,8 @@ define token data16 (16)
 ;
 
 macro setAddFlags(op1,op2) {
-	$(C_flag) = carry(op1,op2);
+	#$(C_flag) = carry(op1,op2);
+	$(C) = carry(op1,op2);
 }
 
 REL8:		reloc				is	rel8	[ reloc = (inst_start & 0xFFFFFFFc) + (rel8 << 2); ] { export *:4 reloc; }
@@ -110,8 +115,11 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 
 :ADDX	Rdest, Rsrc				is op1=0 & Rdest; op3=9 & Rsrc {
 	local tmp = Rdest + Rsrc;
-	local tmp2 = tmp + zext($(C_flag));
-	$(C_flag) = (carry(Rdest, Rsrc) | carry(tmp, tmp2));
+	#local tmp2 = tmp + zext($(C_flag));
+	local tmp2 = tmp + zext($(C));
+	#$(C_flag) = (carry(Rdest, Rsrc) | carry(tmp, tmp2));
+	$(C) = (carry(Rdest, Rsrc) | carry(tmp, tmp2));
+	CBR = zext(carry(Rdest, Rsrc) | carry(tmp, tmp2));
 }
 
 :AND	Rdest, Rsrc				is op1=0 & Rdest; op3=12 & Rsrc {
@@ -123,16 +131,20 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 }
 
 :BC		REL8					is op12=0x7C; REL8 {
-	if ($(C_flag) == 1) goto REL8;
+	#if ($(C_flag) == 1) goto REL8;
+	if ($(C) == 1) goto REL8;
 }
 
 :BC		REL24					is op12=0xFC; REL24 {
-	if ($(C_flag) == 1) goto REL24;
+	#if ($(C_flag) == 1) goto REL24;
+	if ($(C) == 1) goto REL24;
 }
 
 :BCLR	"#"bitpos, "@("rel16,Rsrc")"	is op1=10 & op2_1=0 & bitpos; op3=7 & Rsrc; rel16 {
 	local address = Rsrc + rel16;
-	*address = *:1 address & ~(1 << (7 - bitpos));
+	local value = *:1 address & ~(1 << (7 - bitpos));
+	#*:1 address = value:1;
+	*:1 address = value;
 }
 
 :BCLR	"#"bitpos,"@fp("FPREL_1")"	is op1=10 & op2_1=0 & bitpos; op3=7 & Rsrc=13; FPREL_1 {
@@ -176,11 +188,13 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 }
 
 :BNC	REL8					is op12=0x7D; REL8 {
-	if ($(C_flag) == 0) goto REL8;
+	#if ($(C_flag) == 0) goto REL8;
+	if ($(C) == 0) goto REL8;
 }
 
 :BNC	REL24					is op12=0xFD; REL24 {
-	if ($(C_flag) == 0) goto REL24;
+	#if ($(C_flag) == 0) goto REL24;
+	if ($(C) == 0) goto REL24;
 }
 
 :BNE	Rsrc1, Rsrc2, REL16		is op1=11 & Rsrc1; Rsrc2 & op3=1; REL16 {
@@ -211,8 +225,9 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 :BTST	"#"bitpos, Rsrc			is op1=0 & op2_1=0 & bitpos; op3=15 & Rsrc {
 	#$(C_flag) = (((Rsrc >> (7 - bitpos)) & 1) == 0);
 	# the way below seems to help Ghidra's decompiler, especially when using ENUM.
-	local tmp = Rsrc & (1 << (7 - bitpos));
+	local tmp = Rsrc:1 & (1 << (7 - bitpos));
 	$(C) = (tmp != 0);
+	CBR = zext(tmp != 0);
 }
 
 :CLRPSW	"#"imm8					is op12=0x72; imm8 {
@@ -220,19 +235,27 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 }
 
 :CMP	Rsrc1, Rsrc2			is op1=0 & Rsrc1; Rsrc2 & op3=4 {
-	$(C_flag) = (Rsrc1 s< Rsrc2);
+	#$(C_flag) = (Rsrc1 s< Rsrc2);
+	$(C) = (Rsrc1 s< Rsrc2);
+	CBR = zext(Rsrc1 s< Rsrc2);
 }
 
 :CMPI	Rsrc, "#"simm16			is op12=0x80; Rsrc & op3=4; simm16 {
-	$(C_flag) = (Rsrc s< simm16);
+	#$(C_flag) = (Rsrc s< simm16);
+	$(C) = (Rsrc s< simm16);
+	CBR = zext(Rsrc s< simm16);
 }
 
 :CMPU	Rsrc1, Rsrc2			is op1=0 & Rsrc1; op3=5 & Rsrc2 {
-	$(C_flag) = (Rsrc1 < Rsrc2);
+	#$(C_flag) = (Rsrc1 < Rsrc2);
+	$(C) = (Rsrc1 < Rsrc2);
+	CBR = zext(Rsrc1 < Rsrc2);
 }
 
 :CMPUI	Rsrc, "#"imm16			is op12=0x80; op3=5 & Rsrc; imm16 {
-	$(C_flag) = (Rsrc < imm16);
+	#$(C_flag) = (Rsrc < imm16);
+	$(C) = (Rsrc < imm16);
+	CBR = zext(Rsrc < imm16);
 }
 
 :DIV	Rdest, Rsrc				is op1=9 & Rdest; Rsrc & op3 = 0; imm16 = 0 {
@@ -292,7 +315,7 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 	Rdest = *(Rsrc + rel16);
 }
 
-:LD		Rdest,"@"FPREL			is op1=10 & Rdest; Rsrc=13 & op3=12; FPREL {
+:LD		Rdest,"@fp("FPREL")"	is op1=10 & Rdest; Rsrc=13 & op3=12; FPREL {
 	Rdest = *(FPREL);
 }
 
@@ -308,7 +331,7 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 	Rdest = sext(*:1 (Rsrc + rel16));
 }
 
-:LDB	Rdest,"@("FPREL_1		is op1=10 & Rdest; op3=8 & Rsrc=13; FPREL_1 {
+:LDB	Rdest,"@fp("FPREL_1")"	is op1=10 & Rdest; op3=8 & Rsrc=13; FPREL_1 {
 	Rdest = sext(FPREL_1);
 }
 
@@ -345,7 +368,7 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 }
 
 :LDUH	Rdest,"@("rel16,Rsrc")"	is op1=10 & Rdest; Rsrc & op3=11; rel16 {
-	Rdest = zext(*:2 Rsrc + rel16);
+	Rdest = zext(*:2 (Rsrc + rel16));
 }
 
 :LDUH	Rdest,"@fp("FPREL_2")"	is op1=10 & Rdest; Rsrc=13 & op3=11; FPREL_2 {
@@ -378,15 +401,25 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 #:MVFACLO
 #:MVFACMI
 
+#Test for decompiler
+:MVFC	Rdest",CBRd"				is op1=1 & Rdest; op34=0x91 {
+	#Rdest = zext($(C));
+	Rdest = CBR;
+}
+
 :MVFC	Rdest,CRsrc				is op1=1 & Rdest; op3=9 & CRsrc {
+	#read_creg(Rdest, CRsrc);
 	Rdest = CRsrc;
+	
 }
 
 #:MVTACHI
 #:MVTACLO
 
 :MVTC	Rsrc,CRdest				is op1=1 & CRdest; Rsrc {
+	write_creg(Rsrc, CRdest);
 	CRdest = Rsrc;
+	
 }
 
 :NEG	Rdest, Rsrc				is op1=0 & Rdest; op3=3 & Rsrc {
@@ -533,18 +566,23 @@ FP:			rel					is  rel16	[ rel = rel16 + 0x80c000; ] { export &:4 rel; }
 
 :SUBV	Rdest,Rsrc				is op1=0 & Rdest; op3=0 & Rsrc {
 	Rdest = Rdest - Rsrc;
-	$(C_flag) = sborrow(Rdest, Rsrc);
+	#$(C_flag) = sborrow(Rdest, Rsrc);
+	$(C) = sborrow(Rdest, Rsrc);
+	CBR = zext(sborrow(Rdest, Rsrc));
 }
 
 :SUBX	Rdest, Rsrc		is op1=0 & Rdest; op3=1 & Rsrc { #fix
 	# This is incorrect and needs to have C flag added for borrow
 	Rdest = Rdest - Rsrc;
-	$(C_flag) = sborrow(Rdest, Rsrc);
+	#$(C_flag) = sborrow(Rdest, Rsrc);
+	$(C) = sborrow(Rdest, Rsrc);
+	CBR = zext(sborrow(Rdest, Rsrc));
 }
 
 :TRAP	"#"op4					is op12=0x10; op3=15 & op4 {
 	BPC = inst_start + 4;
-	$(C_flag) = 0;
+	#$(C_flag) = 0;
+	$(C) = 0;
 	# need to 1inish
 } #TODO
 
