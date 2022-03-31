@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <processor_spec>
-	<programcounter register="pc"/>
+	<programcounter register="PC"/>
 	
 	<default_symbols>
 	    <symbol name="RI" address="0x0" type="code" entry="true"/>
